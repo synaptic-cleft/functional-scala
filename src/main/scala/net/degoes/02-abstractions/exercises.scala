@@ -14,9 +14,10 @@ object algebra {
   // Define a semigroup instance for `String`.
   //
   implicit val StringSemigroup: Semigroup[String] =
-    new Semigroup[String] {
-      def append(l: String, r: => String): String = ???
-    }
+  new Semigroup[String] {
+    // call by name, wordt de waarde dus pas gezet als die gebruikt wordt
+    def append(l: String, r: => String): String = l + r
+  }
 
   //
   // EXERCISE 2
@@ -27,7 +28,10 @@ object algebra {
   implicit def NotEmptySemigroup[A]: Semigroup[NotEmpty[A]] =
     new Semigroup[NotEmpty[A]] {
       def append(l: NotEmpty[A], r: => NotEmpty[A]): NotEmpty[A] =
-        ???
+        l.tail match {
+          case Some(tail) => NotEmpty(l.head, Some(append(tail, r)))
+          case None => NotEmpty(l.head, Some(r))
+        }
     }
   val example1 = NotEmpty(1, None) |+| NotEmpty(2, None)
 
@@ -40,7 +44,11 @@ object algebra {
   implicit val MaxSemigroup: Semigroup[Max] =
     new Semigroup[Max] {
       def append(l: Max, r: => Max): Max =
-        ???
+        Max(math.max(l.value, r.value))
+      def append2(l: Max, r: => Max): Max = l.value > r.value match {
+        case true => l
+        case false => r
+      }
     }
 
   //
@@ -52,7 +60,7 @@ object algebra {
   object Last {
     implicit def LastSemigroup[A]: Semigroup[Last[A]] =
       new Semigroup[Last[A]] {
-        def append(l: Last[A], r: => Last[A]): Last[A] = ???
+        def append(l: Last[A], r: => Last[A]): Last[A] = r
       }
   }
   final case class First[A](value: A)
@@ -72,10 +80,10 @@ object algebra {
     new Semigroup[Option[A]] {
       def append(l: Option[A], r: => Option[A]): Option[A] =
         (l, r) match {
-          case (   None,    None) => ???
-          case (Some(l),    None) => ???
-          case (   None, Some(r)) => ???
-          case (Some(l), Some(r)) => ???
+          case ( None, None) => None
+          case (Some(x), None) => Some(x)
+          case ( None, Some(y)) => Some(y)
+          case (Some(x), Some(y)) => Some(Semigroup[A].append(x,y))
         }
     }
 
@@ -86,10 +94,10 @@ object algebra {
   // `B` form semigroups.
   //
   implicit def SemigroupTuple2[A: Semigroup, B: Semigroup]:
-    Semigroup[(A, B)] = new Semigroup[(A, B)] {
-      def append(l: (A, B), r: => (A, B)): (A, B) =
-        ???
-    }
+  Semigroup[(A, B)] = new Semigroup[(A, B)] {
+    def append(l: (A, B), r: => (A, B)): (A, B) =
+      (Semigroup[A].append(l._1, r._1),Semigroup[B].append(r._2, l._2))
+  }
 
   //
   // EXERCISE 7
@@ -100,8 +108,12 @@ object algebra {
   object Conj {
     implicit val ConjMonoid: Monoid[Conj] =
       new Monoid[Conj] {
-        def zero: Conj = ???
-        def append(l: Conj, r: => Conj): Conj = ???
+        def zero: Conj = Conj(true)
+        def append(l: Conj, r: => Conj): Conj = Conj(l.value && r.value)
+        def append2(l: Conj, r: => Conj): Conj = l.value match {
+          case true => Conj(r.value)
+          case false => Conj(false)
+        }
       }
   }
 
@@ -114,8 +126,12 @@ object algebra {
   object Disj {
     implicit val DisjMonoid: Monoid[Disj] =
       new Monoid[Disj] {
-        def zero: Disj = ???
-        def append(l: Disj, r: => Disj): Disj = ???
+        def zero: Disj = Disj(false)
+        def append(l: Disj, r: => Disj): Disj = Disj(l.value || r.value)
+        def append2(l: Disj, r: => Disj): Disj = l.value match {
+          case true => Disj(true)
+          case false => Disj(r.value)
+        }
       }
   }
 
@@ -129,10 +145,14 @@ object algebra {
     new Monoid[scala.util.Try[A]] {
       import scala.util._
 
-      def zero: Try[A] = ???
+      def zero: Try[A] = Try[A]{None.asInstanceOf[A]}
 
       def append(l: Try[A], r: => Try[A]): Try[A] =
-        ???
+        (l.toOption, r.toOption) match {
+          case (_, None) => l
+          case (None, _) => r
+          case (Some(x), Some(y)) => Try(Semigroup[A].append(x, y))
+        }
     }
 
   //
